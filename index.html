@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Excel Upload with Python</title>
+    <title>Excel Functions App</title>
 
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
@@ -13,10 +13,20 @@
 
 <body>
 
-<h1>Upload Excel File</h1>
+<h1>Excel Data Processor</h1>
 
 <input type="file" id="fileInput" accept=".xlsx">
 <button py-click="load_excel()">Load Excel</button>
+
+<hr>
+
+<button py-click="show_info()">Show Info</button>
+<button py-click="sum_column()">Sum Selected Column</button>
+<button py-click="clear_data()">Clear</button>
+
+<br><br>
+
+<input type="text" id="columnName" placeholder="Enter column name">
 
 <div id="output"></div>
 
@@ -25,7 +35,11 @@ from js import document
 import pandas as pd
 import io
 
+df = None  # global dataframe
+
 async def load_excel():
+    global df
+
     file_input = document.getElementById("fileInput")
     file = file_input.files.item(0)
 
@@ -33,17 +47,52 @@ async def load_excel():
         document.getElementById("output").innerHTML = "Please select a file."
         return
 
-    # Read file as array buffer
     array_buffer = await file.arrayBuffer()
     bytes_data = bytes(array_buffer.to_py())
 
-    # Load into pandas
     df = pd.read_excel(io.BytesIO(bytes_data))
 
-    # Convert to HTML table
-    html_table = df.to_html(index=False)
+    document.getElementById("output").innerHTML = df.to_html(index=False)
 
-    document.getElementById("output").innerHTML = html_table
+
+def show_info():
+    global df
+    if df is None:
+        document.getElementById("output").innerHTML = "No file loaded."
+        return
+
+    rows = len(df)
+    columns = ", ".join(df.columns)
+
+    document.getElementById("output").innerHTML = f"""
+    <p><b>Rows:</b> {rows}</p>
+    <p><b>Columns:</b> {columns}</p>
+    """
+
+
+def sum_column():
+    global df
+    if df is None:
+        document.getElementById("output").innerHTML = "No file loaded."
+        return
+
+    col_name = document.getElementById("columnName").value
+
+    if col_name not in df.columns:
+        document.getElementById("output").innerHTML = "Column not found."
+        return
+
+    try:
+        total = df[col_name].sum()
+        document.getElementById("output").innerHTML = f"Sum of {col_name}: {total}"
+    except:
+        document.getElementById("output").innerHTML = "Column is not numeric."
+
+
+def clear_data():
+    global df
+    df = None
+    document.getElementById("output").innerHTML = ""
 </py-script>
 
 </body>
