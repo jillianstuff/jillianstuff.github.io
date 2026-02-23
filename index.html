@@ -1,36 +1,65 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Python on GitHub Pages</title>
+    <title>Python Data App</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body>
 
-<h1>Python Functions on GitHub Pages</h1>
+<h1>Python Data Storage Demo</h1>
 
-<button py-click="say_hello()">Say Hello</button>
-<button py-click="show_time()">Show Time</button>
-<button py-click="calculate_sum()">Calculate Sum</button>
+<input type="text" id="dataInput" placeholder="Enter some data">
+<button py-click="add_data()">Add Data</button>
+<button py-click="load_data()">Show Saved Data</button>
+<button py-click="clear_data()">Clear Data</button>
 
-<p id="output"></p>
+<h3>Saved Items:</h3>
+<ul id="dataList"></ul>
 
 <py-script>
-from datetime import datetime
-from pyscript import display
-from js import document
+from js import document, localStorage
+import json
 
-def say_hello():
-    document.getElementById("output").innerHTML = "Hello from Python!"
+def get_saved_data():
+    data = localStorage.getItem("myData")
+    if data:
+        return json.loads(data)
+    return []
 
-def show_time():
-    now = datetime.now()
-    document.getElementById("output").innerHTML = f"Current time: {now.strftime('%H:%M:%S')}"
+def save_data(data):
+    localStorage.setItem("myData", json.dumps(data))
 
-def calculate_sum():
-    a = 5
-    b = 10
-    document.getElementById("output").innerHTML = f"Sum: {a + b}"
+def add_data():
+    input_box = document.getElementById("dataInput")
+    value = input_box.value.strip()
+
+    if value == "":
+        return
+
+    data = get_saved_data()
+    data.append(value)
+    save_data(data)
+
+    input_box.value = ""
+    load_data()
+
+def load_data():
+    data = get_saved_data()
+    list_element = document.getElementById("dataList")
+    list_element.innerHTML = ""
+
+    for item in data:
+        li = document.createElement("li")
+        li.innerHTML = item
+        list_element.appendChild(li)
+
+def clear_data():
+    localStorage.removeItem("myData")
+    load_data()
+
+# Load existing data when page loads
+load_data()
 </py-script>
 
 </body>
