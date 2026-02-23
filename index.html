@@ -1,17 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Multi Function Demo</title>
+    <title>Python on GitHub Pages</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body>
-    <h1>GitHub Pages Function Demo</h1>
 
-    <button onclick="sayHello()">Say Hello</button>
-    <button onclick="showTime()">Show Time</button>
-    <button onclick="calculateSum()">Calculate Sum</button>
+<h1>Python Functions on GitHub Pages</h1>
 
-    <p id="output"></p>
+<button py-click="say_hello()">Say Hello</button>
+<button py-click="show_time()">Show Time</button>
+<button py-click="calculate_sum()">Calculate Sum</button>
 
-    <script src="script.js"></script>
+<p id="output"></p>
+
+<py-script>
+from datetime import datetime
+from pyscript import display
+from js import document
+
+def say_hello():
+    document.getElementById("output").innerHTML = "Hello from Python!"
+
+def show_time():
+    now = datetime.now()
+    document.getElementById("output").innerHTML = f"Current time: {now.strftime('%H:%M:%S')}"
+
+def calculate_sum():
+    a = 5
+    b = 10
+    document.getElementById("output").innerHTML = f"Sum: {a + b}"
+</py-script>
+
 </body>
 </html>
