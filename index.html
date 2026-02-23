@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Excel Functions App</title>
+    <title>Data Explorer Package</title>
 
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
@@ -37,7 +37,7 @@ import io
 
 df = None  # global dataframe
 
-async def load_excel():
+def load_excel():
     global df
 
     file_input = document.getElementById("fileInput")
