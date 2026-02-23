@@ -1,65 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Python Data App</title>
+    <title>Excel Upload with Python</title>
+
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+    <py-config>
+        packages = ["pandas", "openpyxl"]
+    </py-config>
 </head>
+
 <body>
 
-<h1>Python Data Storage Demo</h1>
+<h1>Upload Excel File</h1>
 
-<input type="text" id="dataInput" placeholder="Enter some data">
-<button py-click="add_data()">Add Data</button>
-<button py-click="load_data()">Show Saved Data</button>
-<button py-click="clear_data()">Clear Data</button>
+<input type="file" id="fileInput" accept=".xlsx">
+<button py-click="load_excel()">Load Excel</button>
 
-<h3>Saved Items:</h3>
-<ul id="dataList"></ul>
+<div id="output"></div>
 
 <py-script>
-from js import document, localStorage
-import json
+from js import document
+import pandas as pd
+import io
 
-def get_saved_data():
-    data = localStorage.getItem("myData")
-    if data:
-        return json.loads(data)
-    return []
+async def load_excel():
+    file_input = document.getElementById("fileInput")
+    file = file_input.files.item(0)
 
-def save_data(data):
-    localStorage.setItem("myData", json.dumps(data))
-
-def add_data():
-    input_box = document.getElementById("dataInput")
-    value = input_box.value.strip()
-
-    if value == "":
+    if not file:
+        document.getElementById("output").innerHTML = "Please select a file."
         return
 
-    data = get_saved_data()
-    data.append(value)
-    save_data(data)
+    # Read file as array buffer
+    array_buffer = await file.arrayBuffer()
+    bytes_data = bytes(array_buffer.to_py())
 
-    input_box.value = ""
-    load_data()
+    # Load into pandas
+    df = pd.read_excel(io.BytesIO(bytes_data))
 
-def load_data():
-    data = get_saved_data()
-    list_element = document.getElementById("dataList")
-    list_element.innerHTML = ""
+    # Convert to HTML table
+    html_table = df.to_html(index=False)
 
-    for item in data:
-        li = document.createElement("li")
-        li.innerHTML = item
-        list_element.appendChild(li)
-
-def clear_data():
-    localStorage.removeItem("myData")
-    load_data()
-
-# Load existing data when page loads
-load_data()
+    document.getElementById("output").innerHTML = html_table
 </py-script>
 
 </body>
