@@ -1,99 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Data Explorer Package</title>
-
-    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-
-    <py-config>
-        packages = ["pandas", "openpyxl"]
-    </py-config>
+  <title>Excel Graph Generator</title>
 </head>
-
 <body>
+  <h2>Upload Excel File to Generate Graph</h2>
 
-<h1>Excel Data Processor</h1>
+  <form id="uploadForm">
+    <input type="file" id="fileInput" accept=".xlsx" required />
+    <button type="submit">Generate Graph</button>
+  </form>
 
-<input type="file" id="fileInput" accept=".xlsx">
-<button py-click="load_excel()">Load Excel</button>
+  <p id="status"></p>
 
-<hr>
+  <script>
+    const form = document.getElementById("uploadForm");
+    const statusText = document.getElementById("status");
 
-<button py-click="show_info()">Show Info</button>
-<button py-click="sum_column()">Sum Selected Column</button>
-<button py-click="clear_data()">Clear</button>
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
 
-<br><br>
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) {
+        statusText.innerText = "Please select a file.";
+        return;
+      }
 
-<input type="text" id="columnName" placeholder="Enter column name">
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Content = reader.result.split(",")[1];
 
-<div id="output"></div>
+        const response = await fetch(
+          "https://api.github.com/repos/YOUR_USERNAME/YOUR_REPO/dispatches",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer YOUR_GITHUB_TOKEN",
+              "Accept": "application/vnd.github+json",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              event_type: "process_excel_graph",
+              client_payload: {
+                file_name: file.name,
+                file_content: base64Content
+              }
+            })
+          }
+        );
 
-<py-script>
-from js import document
-import pandas as pd
-import io
+        if (response.ok) {
+          statusText.innerText =
+            "Processing started. Check GitHub Actions for the generated graph.";
+        } else {
+          statusText.innerText = "Upload failed.";
+        }
+      };
 
-df = None  # global dataframe
-
-async def load_excel():
-    global df
-
-    file_input = document.getElementById("fileInput")
-    file = file_input.files.item(0)
-
-    if not file:
-        document.getElementById("output").innerHTML = "Please select a file."
-        return
-
-    array_buffer = await file.arrayBuffer()
-    bytes_data = bytes(array_buffer.to_py())
-
-    df = pd.read_excel(io.BytesIO(bytes_data))
-
-    document.getElementById("output").innerHTML = df.to_html(index=False)
-
-
-def show_info():
-    global df
-    if df is None:
-        document.getElementById("output").innerHTML = "No file loaded."
-        return
-
-    rows = len(df)
-    columns = ", ".join(df.columns)
-
-    document.getElementById("output").innerHTML = f"""
-    <p><b>Rows:</b> {rows}</p>
-    <p><b>Columns:</b> {columns}</p>
-    """
-
-
-def sum_column():
-    global df
-    if df is None:
-        document.getElementById("output").innerHTML = "No file loaded."
-        return
-
-    col_name = document.getElementById("columnName").value
-
-    if col_name not in df.columns:
-        document.getElementById("output").innerHTML = "Column not found."
-        return
-
-    try:
-        total = df[col_name].sum()
-        document.getElementById("output").innerHTML = f"Sum of {col_name}: {total}"
-    except:
-        document.getElementById("output").innerHTML = "Column is not numeric."
-
-
-def clear_data():
-    global df
-    df = None
-    document.getElementById("output").innerHTML = ""
-</py-script>
-
+      reader.readAsDataURL(file);
+    });
+  </script>
 </body>
 </html>
