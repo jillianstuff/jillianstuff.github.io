@@ -28,3 +28,11 @@ jobs:
         with:
           name: generated-graph
           path: output_graph.png
+
+      - name: Upload plot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: advanced-plot-report
+          path: |
+      *.png
+      report.pdf
