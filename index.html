@@ -3,828 +3,1059 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DataForge — Excel → Graph</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Time Series Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --border: #2a2a3a;
-    --accent: #e8ff47;
-    --accent2: #47ffe8;
-    --text: #f0f0f8;
-    --muted: #6a6a88;
-    --danger: #ff4747;
-  }
+:root {
+  --ink: #1a1a2e;
+  --paper: #f5f2eb;
+  --cream: #ede9df;
+  --rule: #c8c0b0;
+  --accent: #c0392b;
+  --accent2: #2471a3;
+  --green: #1e8449;
+  --gold: #b7860b;
+  --mono: 'DM Mono', monospace;
+  --serif: 'DM Serif Display', serif;
+}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
 
-  /* Grid background */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(232,255,71,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(232,255,71,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
+/* Ruled paper background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 27px,
+    rgba(180,160,130,0.18) 27px,
+    rgba(180,160,130,0.18) 28px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
 
-  .container {
-    position: relative;
-    z-index: 1;
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
+/* Red margin line */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; bottom: 0;
+  left: 220px;
+  width: 1px;
+  background: rgba(192,57,43,0.25);
+  pointer-events: none;
+  z-index: 0;
+}
 
-  /* Header */
-  header {
-    padding: 3rem 0 2rem;
-    display: flex;
-    align-items: flex-end;
-    gap: 1.5rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 3rem;
-  }
+.layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
 
-  .logo-mark {
-    width: 52px;
-    height: 52px;
-    background: var(--accent);
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-  }
+/* ─── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  padding: 2rem 1.25rem;
+  border-right: 1px solid var(--rule);
+  background: rgba(245,242,235,0.85);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
 
-  .logo-mark svg { width: 28px; height: 28px; }
+.sidebar-title {
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+  color: var(--ink);
+}
 
-  h1 {
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 800;
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
+.sidebar-sub {
+  font-size: 0.65rem;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
 
-  h1 span { color: var(--accent); }
+.nav-section {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--rule);
+  margin: 1rem 0 0.4rem;
+}
 
-  .tagline {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 0.25rem;
-  }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.15s;
+  font-size: 0.75rem;
+  color: var(--ink);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
 
-  /* Steps layout */
-  .steps {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
+.nav-item:hover { background: rgba(0,0,0,0.05); }
+.nav-item.active { background: var(--ink); color: var(--paper); }
 
-  .step {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 1.75rem;
-    position: relative;
-    transition: border-color 0.2s;
-  }
+.nav-num {
+  font-size: 0.6rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+  width: 16px;
+}
 
-  .step:hover { border-color: var(--accent); }
+/* Status pill */
+.runtime-status {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.65rem;
+  color: var(--ink);
+  opacity: 0.6;
+}
 
-  .step-num {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--accent);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 0.75rem;
-  }
+.status-pip {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--rule);
+  flex-shrink: 0;
+}
+.status-pip.loading { background: var(--gold); animation: blink 1s ease-in-out infinite; }
+.status-pip.ready   { background: var(--green); }
+.status-pip.error   { background: var(--accent); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-  .step h2 {
-    font-size: 1rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    letter-spacing: -0.01em;
-  }
+/* ─── Main ─────────────────────────────────────────────── */
+.main {
+  padding: 2.5rem 2.5rem 4rem;
+  max-width: 900px;
+}
 
-  /* Upload zone */
-  .upload-zone {
-    border: 1.5px dashed var(--border);
-    padding: 2rem 1.5rem;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-    background: rgba(232,255,71,0.02);
-  }
+/* Page header */
+.page-header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--ink);
+  animation: fadeUp 0.4s ease both;
+}
 
-  .upload-zone:hover, .upload-zone.drag-over {
-    border-color: var(--accent);
-    background: rgba(232,255,71,0.05);
-  }
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(8px); }
+  to   { opacity:1; transform: translateY(0); }
+}
 
-  .upload-zone input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-  }
+.page-header h1 {
+  font-family: var(--serif);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
 
-  .upload-icon {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-  }
+.page-header h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
 
-  .upload-zone p {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin-top: 0.25rem;
-  }
+.page-header p {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
 
-  .upload-zone .file-name {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--accent2);
-    margin-top: 0.5rem;
-    word-break: break-all;
-  }
+/* Upload section */
+.section {
+  margin-bottom: 2rem;
+  animation: fadeUp 0.4s ease both;
+}
 
-  /* Controls */
-  .control-group { margin-bottom: 1rem; }
+.section-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
-  label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.4rem;
-  }
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
 
-  select, input[type="text"] {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.6rem 0.75rem;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.8rem;
-    appearance: none;
-    cursor: pointer;
-    transition: border-color 0.15s;
-    outline: none;
-  }
+.upload-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
 
-  select:focus, input[type="text"]:focus {
-    border-color: var(--accent);
-  }
+.upload-box {
+  border: 1.5px dashed var(--rule);
+  padding: 1.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  background: rgba(255,255,255,0.4);
+}
 
-  /* Column selectors */
-  .col-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
+.upload-box:hover, .upload-box.drag-over {
+  border-color: var(--accent2);
+  background: rgba(36,113,163,0.04);
+}
 
-  /* Run button */
-  .step.full {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
+.upload-box input[type="file"] {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer;
+  width: 100%; height: 100%;
+}
 
-  .run-btn {
-    background: var(--accent);
-    color: #0a0a0f;
-    border: none;
-    padding: 0.85rem 2rem;
-    font-family: 'Syne', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all 0.15s;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
+.upload-box .icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+.upload-box strong { font-size: 0.75rem; }
+.upload-box p { font-size: 0.65rem; color: var(--gold); margin-top: 0.2rem; }
+.file-set { font-size: 0.7rem; color: var(--green); margin-top: 0.3rem; word-break: break-all; }
 
-  .run-btn:hover:not(:disabled) {
-    background: #fff;
-    transform: translateY(-1px);
-  }
+/* Input grid */
+.input-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
 
-  .run-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
+.field { display: flex; flex-direction: column; gap: 0.3rem; }
 
-  .run-btn .spinner {
-    display: none;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(0,0,0,0.3);
-    border-top-color: #000;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
+label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  opacity: 0.6;
+}
 
-  .run-btn.loading .spinner { display: block; }
-  .run-btn.loading .btn-text { display: none; }
+input, select {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--rule);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
 
-  @keyframes spin { to { transform: rotate(360deg); } }
+input:focus, select:focus { border-color: var(--accent2); }
 
-  /* Status bar */
-  .status-bar {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
+/* Function cards */
+.fn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
 
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--muted);
-    flex-shrink: 0;
-  }
+.fn-card {
+  border: 1px solid var(--rule);
+  background: rgba(255,255,255,0.5);
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
 
-  .status-dot.loading { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
-  .status-dot.ready { background: var(--accent2); }
-  .status-dot.error { background: var(--danger); }
+.fn-card:hover { border-color: var(--accent2); background: rgba(36,113,163,0.04); }
+.fn-card.selected { border-color: var(--accent); background: rgba(192,57,43,0.05); }
+.fn-card.selected::before {
+  content: '✓';
+  position: absolute;
+  top: 6px; right: 8px;
+  font-size: 0.7rem;
+  color: var(--accent);
+}
 
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.fn-num {
+  font-size: 0.6rem;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  margin-bottom: 0.25rem;
+}
 
-  /* Output section */
-  .output-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    padding: 2rem;
-    display: none;
-  }
+.fn-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
 
-  .output-section.visible { display: block; }
+.fn-desc {
+  font-size: 0.65rem;
+  color: var(--ink);
+  opacity: 0.55;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
 
-  .output-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-  }
+/* Extra params for specific functions */
+.extra-params {
+  display: none;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
 
-  .output-header h2 {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-  }
+.extra-params.visible { display: block; }
+.extra-params .input-grid { margin-bottom: 0; }
 
-  .download-btn {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--accent2);
-    background: none;
-    border: 1px solid var(--accent2);
-    padding: 0.35rem 0.75rem;
-    cursor: pointer;
-    transition: all 0.15s;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
+/* Run button */
+.run-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
 
-  .download-btn:hover {
-    background: var(--accent2);
-    color: var(--bg);
-  }
+.run-btn {
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  padding: 0.7rem 2rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 0.5rem;
+}
 
-  #chart-output {
-    width: 100%;
-    border: 1px solid var(--border);
-  }
+.run-btn:hover:not(:disabled) { background: var(--accent); }
+.run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-  /* Error output */
-  .error-box {
-    background: rgba(255,71,71,0.08);
-    border: 1px solid var(--danger);
-    padding: 1rem 1.25rem;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--danger);
-    white-space: pre-wrap;
-    display: none;
-    margin-top: 1rem;
-  }
+.run-btn .spinner {
+  display: none;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(245,242,235,0.3);
+  border-top-color: var(--paper);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 
-  .error-box.visible { display: block; }
+.run-btn.loading .spinner { display: block; }
+.run-btn.loading .btn-text { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Preview table */
-  .preview-wrap {
-    overflow-x: auto;
-    max-height: 200px;
-    overflow-y: auto;
-    display: none;
-    margin-top: 1rem;
-  }
+/* Output area */
+.output-wrap {
+  display: none;
+  border: 1px solid var(--rule);
+  background: rgba(255,255,255,0.6);
+  overflow: hidden;
+}
 
-  .preview-wrap.visible { display: block; }
+.output-wrap.visible { display: block; }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-  }
+.output-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
+}
 
-  th {
-    background: var(--bg);
-    color: var(--accent);
-    padding: 0.4rem 0.75rem;
-    text-align: left;
-    font-weight: 500;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }
+.output-topbar span { font-size: 0.7rem; letter-spacing: 0.08em; }
 
-  td {
-    padding: 0.35rem 0.75rem;
-    border-bottom: 1px solid rgba(42,42,58,0.5);
-    color: var(--muted);
-    white-space: nowrap;
-  }
+.dl-btn {
+  background: none;
+  border: 1px solid rgba(245,242,235,0.3);
+  color: var(--paper);
+  padding: 0.25rem 0.75rem;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.06em;
+}
+.dl-btn:hover { background: rgba(245,242,235,0.1); }
 
-  tr:last-child td { border-bottom: none; }
+.output-img { width: 100%; display: block; }
+
+/* Console output (for f8/f9 text) */
+.console-out {
+  display: none;
+  padding: 1.25rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  color: var(--ink);
+  background: #faf8f3;
+  border-top: 1px solid var(--rule);
+}
+
+.console-out.visible { display: block; }
+.console-out .stationary { color: var(--green); font-weight: 500; }
+.console-out .nonstationary { color: var(--accent); font-weight: 500; }
+
+/* Error */
+.err-out {
+  display: none;
+  padding: 1rem 1.25rem;
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: rgba(192,57,43,0.05);
+  border-top: 1px solid var(--rule);
+  white-space: pre-wrap;
+}
+.err-out.visible { display: block; }
+
+/* Table preview */
+.preview-scroll {
+  display: none;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--rule);
+  margin-top: 0.75rem;
+}
+.preview-scroll.visible { display: block; }
+table { width: 100%; border-collapse: collapse; font-size: 0.68rem; }
+th { background: var(--ink); color: var(--paper); padding: 0.35rem 0.75rem; text-align: left; white-space: nowrap; }
+td { padding: 0.28rem 0.75rem; border-bottom: 1px solid var(--rule); color: var(--ink); opacity: 0.75; white-space: nowrap; }
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <div class="logo-mark">
-      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="14" width="5" height="12" fill="#0a0a0f"/>
-        <rect x="9" y="8" width="5" height="18" fill="#0a0a0f"/>
-        <rect x="16" y="4" width="5" height="22" fill="#0a0a0f"/>
-        <polyline points="4,13 11,7 18,3 25,8" stroke="#0a0a0f" stroke-width="2" fill="none" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <div>
-      <div class="tagline">Python · Pyodide · In-browser</div>
-      <h1>Data<span>Forge</span></h1>
-    </div>
-  </header>
+<div class="layout">
 
-  <div class="steps">
-    <!-- Step 1: Upload -->
-    <div class="step">
-      <div class="step-num">01 — Upload</div>
-      <h2>Drop your Excel file</h2>
-      <div class="upload-zone" id="uploadZone">
+<!-- ─── Sidebar ─────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-title">Time Series<br>Explorer</div>
+  <div class="sidebar-sub">by Jillian Hesler</div>
+
+  <div class="nav-section">Visualisation</div>
+  <button class="nav-item" data-fn="f1"><span class="nav-num">f1</span>Basic Plot</button>
+  <button class="nav-item" data-fn="f2"><span class="nav-num">f2</span>Resampled Plot</button>
+  <button class="nav-item" data-fn="f3"><span class="nav-num">f3</span>Partial Timeframe</button>
+  <button class="nav-item" data-fn="f4"><span class="nav-num">f4</span>Regression</button>
+
+  <div class="nav-section">Decomposition</div>
+  <button class="nav-item" data-fn="f5"><span class="nav-num">f5</span>Time Decomposition</button>
+  <button class="nav-item" data-fn="f6"><span class="nav-num">f6</span>ACF</button>
+  <button class="nav-item" data-fn="f7"><span class="nav-num">f7</span>PACF</button>
+
+  <div class="nav-section">Stationarity</div>
+  <button class="nav-item" data-fn="f8"><span class="nav-num">f8</span>ADF Test</button>
+  <button class="nav-item" data-fn="f9"><span class="nav-num">f9</span>KPSS Test</button>
+
+  <div class="runtime-status">
+    <div class="status-pip loading" id="sidePip"></div>
+    <span id="sideStatus">Loading runtime…</span>
+  </div>
+</aside>
+
+<!-- ─── Main ─────────────────────────────────────────────── -->
+<main class="main">
+  <div class="page-header">
+    <h1>Time Series <em>Analysis</em></h1>
+    <p>Upload your Excel file, define your columns, and run any analysis function directly in the browser.</p>
+  </div>
+
+  <!-- Upload + Global Inputs -->
+  <div class="section">
+    <div class="section-label">01 — Data</div>
+    <div class="upload-row">
+      <div class="upload-box" id="uploadBox">
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
-        <div class="upload-icon">📊</div>
-        <strong>Click or drag file here</strong>
+        <div class="icon">📂</div>
+        <strong>Upload File</strong>
         <p>.xlsx · .xls · .csv</p>
-        <div class="file-name" id="fileName"></div>
+        <div class="file-set" id="fileName"></div>
       </div>
-      <div class="preview-wrap" id="previewWrap">
-        <table id="previewTable"></table>
-      </div>
-    </div>
-
-    <!-- Step 2: Configure -->
-    <div class="step">
-      <div class="step-num">02 — Configure</div>
-      <h2>Choose chart settings</h2>
-
-      <div class="control-group">
-        <label>Chart Type</label>
-        <select id="chartType">
-          <option value="bar">Bar Chart</option>
-          <option value="line">Line Chart</option>
-          <option value="scatter">Scatter Plot</option>
-          <option value="histogram">Histogram</option>
-          <option value="pie">Pie Chart</option>
-          <option value="box">Box Plot</option>
-        </select>
-      </div>
-
-      <div class="col-row">
-        <div class="control-group">
-          <label>X Column</label>
-          <select id="xCol"><option value="">— select —</option></select>
+      <div style="grid-column: span 2; display: flex; flex-direction: column; justify-content: center;">
+        <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+          <div class="field">
+            <label>Time Column</label>
+            <input id="timeCol" type="text" placeholder="e.g. Week" />
+          </div>
+          <div class="field">
+            <label>Data Column</label>
+            <input id="dataCol" type="text" placeholder="e.g. Interest" />
+          </div>
+          <div class="field">
+            <label>Time Unit</label>
+            <input id="timeUnit" type="text" placeholder="e.g. Weeks" />
+          </div>
+          <div class="field">
+            <label>Data Unit</label>
+            <input id="dataUnit" type="text" placeholder="e.g. Percent" />
+          </div>
         </div>
-        <div class="control-group">
-          <label>Y Column</label>
-          <select id="yCol"><option value="">— select —</option></select>
+        <div class="preview-scroll" id="previewScroll">
+          <table id="previewTable"></table>
         </div>
       </div>
+    </div>
+  </div>
 
-      <div class="control-group">
-        <label>Chart Title</label>
-        <input type="text" id="chartTitle" placeholder="My Chart" />
+  <!-- Function selection -->
+  <div class="section">
+    <div class="section-label">02 — Select Function</div>
+    <div class="fn-grid">
+      <div class="fn-card" data-fn="f1" onclick="selectFn('f1')">
+        <div class="fn-num">F1</div>
+        <div class="fn-name">Basic Plot</div>
+        <div class="fn-desc">Raw time series line chart</div>
       </div>
-
-      <div class="control-group">
-        <label>Color Palette</label>
-        <select id="palette">
-          <option value="plasma">Plasma</option>
-          <option value="viridis">Viridis</option>
-          <option value="cividis">Cividis</option>
-          <option value="inferno">Inferno</option>
-          <option value="tab10">Classic Tab10</option>
-        </select>
+      <div class="fn-card" data-fn="f2" onclick="selectFn('f2')">
+        <div class="fn-num">F2</div>
+        <div class="fn-name">Resampled Plot</div>
+        <div class="fn-desc">Monthly resampled average</div>
+      </div>
+      <div class="fn-card" data-fn="f3" onclick="selectFn('f3')">
+        <div class="fn-num">F3</div>
+        <div class="fn-name">Partial Timeframe</div>
+        <div class="fn-desc">Plot a custom date range</div>
+        <div class="extra-params" id="ep-f3">
+          <div class="input-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="field"><label>Start Date</label><input id="f3start" type="text" placeholder="YYYY-MM-DD" value="2022-01-01"/></div>
+            <div class="field"><label>End Date</label><input id="f3end" type="text" placeholder="YYYY-MM-DD" value="2023-12-31"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-card" data-fn="f4" onclick="selectFn('f4')">
+        <div class="fn-num">F4</div>
+        <div class="fn-name">Regression Analysis</div>
+        <div class="fn-desc">Linear regression + R² overlay</div>
+      </div>
+      <div class="fn-card" data-fn="f5" onclick="selectFn('f5')">
+        <div class="fn-num">F5</div>
+        <div class="fn-name">Time Decomposition</div>
+        <div class="fn-desc">Trend, seasonal, residual</div>
+        <div class="extra-params" id="ep-f5">
+          <div class="input-grid" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="field">
+              <label>Model</label>
+              <select id="f5model"><option value="additive">Additive</option><option value="multiplicative">Multiplicative</option></select>
+            </div>
+            <div class="field"><label>Period</label><input id="f5period" type="number" value="12" min="2"/></div>
+            <div class="field"><label>Freq (opt)</label><input id="f5freq" type="text" placeholder="D / M / W" /></div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-card" data-fn="f6" onclick="selectFn('f6')">
+        <div class="fn-num">F6</div>
+        <div class="fn-name">ACF</div>
+        <div class="fn-desc">Autocorrelation function</div>
+        <div class="extra-params" id="ep-f6">
+          <div class="input-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="field"><label>Lags</label><input id="f6lags" type="number" value="40" min="1"/></div>
+            <div class="field"><label>Freq (opt)</label><input id="f6freq" type="text" placeholder="D / M / W"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-card" data-fn="f7" onclick="selectFn('f7')">
+        <div class="fn-num">F7</div>
+        <div class="fn-name">PACF</div>
+        <div class="fn-desc">Partial autocorrelation function</div>
+        <div class="extra-params" id="ep-f7">
+          <div class="input-grid" style="grid-template-columns:1fr 1fr 1fr;">
+            <div class="field"><label>Lags</label><input id="f7lags" type="number" value="40" min="1"/></div>
+            <div class="field"><label>Freq (opt)</label><input id="f7freq" type="text" placeholder="D / M / W"/></div>
+            <div class="field"><label>Method</label><input id="f7method" type="text" value="ywm"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-card" data-fn="f8" onclick="selectFn('f8')">
+        <div class="fn-num">F8</div>
+        <div class="fn-name">ADF Test</div>
+        <div class="fn-desc">Augmented Dickey-Fuller stationarity</div>
+        <div class="extra-params" id="ep-f8">
+          <div class="input-grid" style="grid-template-columns:1fr;">
+            <div class="field"><label>Alpha</label><input id="f8alpha" type="number" value="0.05" step="0.01"/></div>
+          </div>
+        </div>
+      </div>
+      <div class="fn-card" data-fn="f9" onclick="selectFn('f9')">
+        <div class="fn-num">F9</div>
+        <div class="fn-name">KPSS Test</div>
+        <div class="fn-desc">KPSS stationarity test</div>
+        <div class="extra-params" id="ep-f9">
+          <div class="input-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="field">
+              <label>Regression</label>
+              <select id="f9reg"><option value="c">c (constant)</option><option value="ct">ct (trend)</option></select>
+            </div>
+            <div class="field"><label>Alpha</label><input id="f9alpha" type="number" value="0.05" step="0.01"/></div>
+          </div>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Step 3: Run -->
-    <div class="step full">
-      <div class="status-bar">
-        <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">Loading Python runtime…</span>
-      </div>
+  <!-- Run -->
+  <div class="section">
+    <div class="section-label">03 — Execute</div>
+    <div class="run-row">
       <button class="run-btn" id="runBtn" disabled>
         <div class="spinner"></div>
-        <span class="btn-text">▶ Generate Graph</span>
+        <span class="btn-text">▶ Run Analysis</span>
       </button>
+      <span id="runStatus" style="font-size:0.7rem; color: var(--gold);"></span>
     </div>
   </div>
 
   <!-- Output -->
-  <div class="output-section" id="outputSection">
-    <div class="output-header">
-      <h2>Output — Graph</h2>
-      <button class="download-btn" id="downloadBtn">↓ Download PNG</button>
+  <div class="output-wrap" id="outputWrap">
+    <div class="output-topbar">
+      <span id="outputLabel">OUTPUT</span>
+      <button class="dl-btn" id="dlBtn">↓ Download PNG</button>
     </div>
-    <img id="chart-output" alt="Generated chart" />
-    <div class="error-box" id="errorBox"></div>
+    <img class="output-img" id="outputImg" alt="" style="display:none"/>
+    <div class="console-out" id="consoleOut"></div>
+    <div class="err-out" id="errOut"></div>
   </div>
+
+</main>
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────────────────────
+// ─── State ───────────────────────────────────────────────
 let pyodide = null;
 let fileData = null;
-let columns = [];
+let selectedFn = null;
 let chartDataUrl = null;
 
-// ─── DOM refs ────────────────────────────────────────────────────
+// ─── DOM ─────────────────────────────────────────────────
 const fileInput   = document.getElementById('fileInput');
 const fileName    = document.getElementById('fileName');
-const uploadZone  = document.getElementById('uploadZone');
-const previewWrap = document.getElementById('previewWrap');
-const previewTable= document.getElementById('previewTable');
-const xColSel     = document.getElementById('xCol');
-const yColSel     = document.getElementById('yCol');
-const chartType   = document.getElementById('chartType');
-const chartTitle  = document.getElementById('chartTitle');
-const palette     = document.getElementById('palette');
+const uploadBox   = document.getElementById('uploadBox');
+const previewScroll = document.getElementById('previewScroll');
+const previewTable = document.getElementById('previewTable');
 const runBtn      = document.getElementById('runBtn');
-const statusDot   = document.getElementById('statusDot');
-const statusText  = document.getElementById('statusText');
-const outputSection= document.getElementById('outputSection');
-const chartOutput = document.getElementById('chart-output');
-const errorBox    = document.getElementById('errorBox');
-const downloadBtn = document.getElementById('downloadBtn');
+const runStatus   = document.getElementById('runStatus');
+const outputWrap  = document.getElementById('outputWrap');
+const outputImg   = document.getElementById('outputImg');
+const consoleOut  = document.getElementById('consoleOut');
+const errOut      = document.getElementById('errOut');
+const outputLabel = document.getElementById('outputLabel');
+const dlBtn       = document.getElementById('dlBtn');
+const sidePip     = document.getElementById('sidePip');
+const sideStatus  = document.getElementById('sideStatus');
 
-// ─── Status helpers ───────────────────────────────────────────────
-function setStatus(state, msg) {
-  statusDot.className = 'status-dot ' + state;
-  statusText.textContent = msg;
+function setRuntime(state, msg) {
+  sidePip.className = 'status-pip ' + state;
+  sideStatus.textContent = msg;
 }
 
-// ─── Load Pyodide ────────────────────────────────────────────────
+// ─── Init Pyodide ─────────────────────────────────────────
 async function initPyodide() {
-  setStatus('loading', 'Loading Python runtime (first load ~5s)…');
+  setRuntime('loading', 'Loading runtime…');
   try {
     pyodide = await loadPyodide();
     await pyodide.loadPackage(['micropip', 'numpy', 'pandas', 'matplotlib']);
     const micropip = pyodide.pyimport('micropip');
+    setRuntime('loading', 'Installing packages…');
     await micropip.install('openpyxl');
-    setStatus('ready', 'Python ready — upload a file to begin');
-    runBtn.disabled = !fileData;
-  } catch (e) {
-    setStatus('error', 'Failed to load Python: ' + e.message);
+    await micropip.install('seaborn');
+    await micropip.install('statsmodels');
+    setRuntime('ready', 'Runtime ready');
+    runStatus.textContent = '';
+    if (fileData && selectedFn) runBtn.disabled = false;
+    else if (fileData) runBtn.disabled = false;
+  } catch(e) {
+    setRuntime('error', 'Load failed');
+    runStatus.textContent = e.message;
   }
 }
 
-// ─── File handling ────────────────────────────────────────────────
+// ─── File handling ────────────────────────────────────────
 function handleFile(file) {
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
-  if (!['xlsx','xls','csv'].includes(ext)) {
-    alert('Please upload an .xlsx, .xls, or .csv file.');
-    return;
-  }
-  fileName.textContent = file.name;
+  if (!['xlsx','xls','csv'].includes(ext)) { alert('Please upload .xlsx, .xls, or .csv'); return; }
+  fileName.textContent = '📄 ' + file.name;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     fileData = { name: file.name, ext, data: e.target.result };
-    if (pyodide) {
-      setStatus('loading', 'Parsing file…');
-      loadDataPreview().then(() => {
-        setStatus('ready', 'File loaded — configure and generate');
-        runBtn.disabled = false;
-      }).catch(err => {
-        setStatus('error', 'Parse error: ' + err);
-      });
-    }
+    if (pyodide) await loadPreview();
+    runBtn.disabled = !(pyodide && selectedFn);
   };
+  if (ext === 'csv') reader.readAsText(file);
+  else reader.readAsArrayBuffer(file);
+}
+
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+uploadBox.addEventListener('dragover', e => { e.preventDefault(); uploadBox.classList.add('drag-over'); });
+uploadBox.addEventListener('dragleave', () => uploadBox.classList.remove('drag-over'));
+uploadBox.addEventListener('drop', e => { e.preventDefault(); uploadBox.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+async function loadPreview() {
+  try {
+    const script = await buildLoadDf() + `
+import json
+cols = df.columns.tolist()
+preview = df.head(6).astype(str).values.tolist()
+json.dumps({"cols": cols, "preview": preview})
+`;
+    const r = JSON.parse(await pyodide.runPythonAsync(script));
+    previewTable.innerHTML = '';
+    const thead = previewTable.createTHead(), hr = thead.insertRow();
+    r.cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; hr.appendChild(th); });
+    const tbody = previewTable.createTBody();
+    r.preview.forEach(row => { const tr = tbody.insertRow(); row.forEach(v => { const td = tr.insertCell(); td.textContent = v; }); });
+    previewScroll.classList.add('visible');
+  } catch(e) { /* silent */ }
+}
+
+async function buildLoadDf() {
+  const { ext, data } = fileData;
   if (ext === 'csv') {
-    reader.readAsText(file);
+    pyodide.globals.set('_csv', data);
+    return `import pandas as pd, io\ndf = pd.read_csv(io.StringIO(_csv), parse_dates=True)\n`;
   } else {
-    reader.readAsArrayBuffer(file);
+    const u8 = new Uint8Array(data);
+    pyodide.globals.set('_xlsx', u8);
+    return `import pandas as pd, io\ndf = pd.read_excel(io.BytesIO(bytes(_xlsx.to_py())), engine='openpyxl', parse_dates=True)\n`;
   }
 }
 
-fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
-uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
-uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
-uploadZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadZone.classList.remove('drag-over');
-  handleFile(e.dataTransfer.files[0]);
+// ─── Function selection ───────────────────────────────────
+function selectFn(fn) {
+  // Deselect all
+  document.querySelectorAll('.fn-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.extra-params').forEach(p => p.classList.remove('visible'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  selectedFn = fn;
+  document.querySelector(`.fn-card[data-fn="${fn}"]`).classList.add('selected');
+  document.querySelector(`.nav-item[data-fn="${fn}"]`).classList.add('active');
+
+  const ep = document.getElementById('ep-' + fn);
+  if (ep) ep.classList.add('visible');
+
+  if (pyodide && fileData) runBtn.disabled = false;
+}
+
+document.querySelectorAll('.nav-item[data-fn]').forEach(btn => {
+  btn.addEventListener('click', () => selectFn(btn.dataset.fn));
 });
 
-// ─── Preview + column loading ──────────────────────────────────────
-async function loadDataPreview() {
-  const { name, ext, data } = fileData;
-  let pyScript;
+// ─── Run ──────────────────────────────────────────────────
+runBtn.addEventListener('click', run);
 
-  if (ext === 'csv') {
-    pyodide.globals.set('csv_text', data);
-    pyScript = `
-import pandas as pd, io, json
-df = pd.read_csv(io.StringIO(csv_text))
-cols = df.columns.tolist()
-preview = df.head(8).astype(str).values.tolist()
-result = json.dumps({"cols": cols, "preview": preview})
-result
-`;
-  } else {
-    const uint8 = new Uint8Array(data);
-    pyodide.globals.set('xlsx_bytes', uint8.tobytes ? uint8 : Array.from(uint8));
-    pyodide.runPython(`
-import js
-raw = js.Uint8Array.new(${JSON.stringify(Array.from(uint8))})
-`);
-    pyodide.globals.set('_xlsx_arr', uint8);
-    pyScript = `
-import pandas as pd, io, json, js
-import numpy as np
-buf = bytes(_xlsx_arr.to_py())
-df = pd.read_excel(io.BytesIO(buf), engine='openpyxl')
-cols = df.columns.tolist()
-preview = df.head(8).astype(str).values.tolist()
-result = json.dumps({"cols": cols, "preview": preview})
-result
-`;
-  }
+async function run() {
+  if (!pyodide || !fileData || !selectedFn) return;
 
-  // Pass xlsx bytes via pyodide buffer
-  if (ext !== 'csv') {
-    const uint8 = new Uint8Array(data);
-    pyodide.globals.set('_xlsx_arr', uint8);
-    pyScript = `
-import pandas as pd, io, json
-buf = bytes(_xlsx_arr.to_py())
-df = pd.read_excel(io.BytesIO(buf), engine='openpyxl')
-cols = df.columns.tolist()
-preview = df.head(8).astype(str).values.tolist()
-result = json.dumps({"cols": cols, "preview": preview})
-result
-`;
-  }
+  const tcol = document.getElementById('timeCol').value.trim();
+  const dcol = document.getElementById('dataCol').value.trim();
+  const tunit = document.getElementById('timeUnit').value.trim() || 'units';
+  const dunit = document.getElementById('dataUnit').value.trim() || 'values';
 
-  const resultStr = await pyodide.runPythonAsync(pyScript);
-  const result = JSON.parse(resultStr);
-  columns = result.cols;
-
-  // Populate column selectors
-  [xColSel, yColSel].forEach((sel, i) => {
-    sel.innerHTML = '<option value="">— select —</option>';
-    columns.forEach((c, ci) => {
-      const opt = document.createElement('option');
-      opt.value = c; opt.textContent = c;
-      if (ci === i) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  });
-
-  // Render preview table
-  previewTable.innerHTML = '';
-  const thead = previewTable.createTHead();
-  const hr = thead.insertRow();
-  columns.forEach(c => { const th = document.createElement('th'); th.textContent = c; hr.appendChild(th); });
-  const tbody = previewTable.createTBody();
-  result.preview.forEach(row => {
-    const tr = tbody.insertRow();
-    row.forEach(cell => { const td = tr.insertCell(); td.textContent = cell; });
-  });
-  previewWrap.classList.add('visible');
-}
-
-// ─── Generate chart ───────────────────────────────────────────────
-async function generateChart() {
-  if (!pyodide || !fileData) return;
-
-  const xCol = xColSel.value;
-  const yCol = yColSel.value;
-  const type = chartType.value;
-  const title = chartTitle.value || 'Chart';
-  const pal = palette.value;
-  const { ext, data } = fileData;
+  if (!tcol || !dcol) { alert('Please enter Time Column and Data Column names.'); return; }
 
   runBtn.classList.add('loading');
   runBtn.disabled = true;
-  errorBox.classList.remove('visible');
-  outputSection.classList.remove('visible');
+  outputWrap.classList.remove('visible');
+  outputImg.style.display = 'none';
+  consoleOut.classList.remove('visible');
+  errOut.classList.remove('visible');
+  consoleOut.innerHTML = '';
+  errOut.textContent = '';
+  chartDataUrl = null;
 
   try {
-    let loadDf;
-    if (ext === 'csv') {
-      pyodide.globals.set('csv_text', data);
-      loadDf = `df = pd.read_csv(io.StringIO(csv_text))`;
-    } else {
-      const uint8 = new Uint8Array(data);
-      pyodide.globals.set('_xlsx_arr', uint8);
-      loadDf = `df = pd.read_excel(io.BytesIO(bytes(_xlsx_arr.to_py())), engine='openpyxl')`;
-    }
-
-    pyodide.globals.set('_xcol', xCol);
-    pyodide.globals.set('_ycol', yCol);
-    pyodide.globals.set('_title', title);
-    pyodide.globals.set('_palette', pal);
-    pyodide.globals.set('_type', type);
-
-    const pyCode = `
-import pandas as pd, io, base64, json, matplotlib
+    const loadDf = await buildLoadDf();
+    const mplStyle = `
+import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import numpy as np
-
-${loadDf}
-
-xcol = _xcol
-ycol = _ycol
-title = _title
-palette = _palette
-chart_type = _type
-
-# Matplotlib style
+import seaborn as sns
 plt.rcParams.update({
-    'figure.facecolor': '#111118',
-    'axes.facecolor':   '#0a0a0f',
-    'axes.edgecolor':   '#2a2a3a',
-    'axes.labelcolor':  '#f0f0f8',
-    'text.color':       '#f0f0f8',
-    'xtick.color':      '#6a6a88',
-    'ytick.color':      '#6a6a88',
-    'grid.color':       '#1e1e2e',
-    'grid.linewidth':   0.6,
-    'font.family':      'monospace',
-    'axes.titleweight': 'bold',
-    'axes.titlesize':   13,
-    'axes.titlepad':    14,
-    'axes.titlecolor':  '#e8ff47',
+  'figure.facecolor': '#faf8f3',
+  'axes.facecolor':   '#f5f2eb',
+  'axes.edgecolor':   '#c8c0b0',
+  'axes.labelcolor':  '#1a1a2e',
+  'text.color':       '#1a1a2e',
+  'xtick.color':      '#555',
+  'ytick.color':      '#555',
+  'grid.color':       '#ddd9d0',
+  'grid.linewidth':   0.7,
+  'font.family':      'monospace',
 })
-
-fig, ax = plt.subplots(figsize=(9, 5))
-fig.patch.set_linewidth(0)
-
-cmap = cm.get_cmap(palette)
-n = min(len(df), 50)
-
-if chart_type == 'bar':
-    x_data = df[xcol].astype(str) if xcol else df.index.astype(str)
-    y_data = pd.to_numeric(df[ycol], errors='coerce') if ycol else df.iloc[:,1]
-    colors = [cmap(i/max(len(x_data)-1,1)) for i in range(len(x_data))]
-    bars = ax.bar(x_data, y_data, color=colors, edgecolor='none', zorder=3)
-    ax.set_xlabel(xcol); ax.set_ylabel(ycol)
-    if len(x_data) > 10:
-        plt.xticks(rotation=45, ha='right', fontsize=7)
-    ax.grid(axis='y', zorder=1)
-
-elif chart_type == 'line':
-    x_data = pd.to_numeric(df[xcol], errors='coerce') if xcol else df.index
-    y_data = pd.to_numeric(df[ycol], errors='coerce') if ycol else df.iloc[:,1]
-    line_color = cmap(0.7)
-    ax.plot(x_data, y_data, color=line_color, linewidth=2, zorder=3)
-    ax.fill_between(x_data, y_data, alpha=0.12, color=line_color, zorder=2)
-    ax.scatter(x_data, y_data, color=line_color, s=30, zorder=4, edgecolors='none')
-    ax.set_xlabel(xcol); ax.set_ylabel(ycol)
-    ax.grid(zorder=1)
-
-elif chart_type == 'scatter':
-    x_data = pd.to_numeric(df[xcol], errors='coerce') if xcol else df.iloc[:,0]
-    y_data = pd.to_numeric(df[ycol], errors='coerce') if ycol else df.iloc[:,1]
-    sc = ax.scatter(x_data, y_data, c=np.arange(len(x_data)), cmap=palette,
-                    s=50, alpha=0.85, edgecolors='none', zorder=3)
-    plt.colorbar(sc, ax=ax, pad=0.02)
-    ax.set_xlabel(xcol); ax.set_ylabel(ycol)
-    ax.grid(zorder=1)
-
-elif chart_type == 'histogram':
-    col = ycol if ycol else xcol
-    data_h = pd.to_numeric(df[col], errors='coerce').dropna()
-    n_bins = min(30, max(10, len(data_h)//10))
-    counts, bins, patches = ax.hist(data_h, bins=n_bins, edgecolor='none', zorder=3)
-    for i, p in enumerate(patches):
-        p.set_facecolor(cmap(i / max(len(patches)-1, 1)))
-    ax.set_xlabel(col); ax.set_ylabel('Frequency')
-    ax.grid(axis='y', zorder=1)
-
-elif chart_type == 'pie':
-    col = ycol if ycol else xcol
-    labels_col = xcol if xcol else df.columns[0]
-    vals = pd.to_numeric(df[col], errors='coerce').fillna(0).head(12)
-    labels = df[labels_col].astype(str).head(12)
-    colors = [cmap(i/max(len(vals)-1,1)) for i in range(len(vals))]
-    wedge_props = dict(linewidth=1.5, edgecolor='#111118')
-    ax.pie(vals, labels=labels, colors=colors, autopct='%1.1f%%',
-           wedgeprops=wedge_props, textprops={'fontsize':8})
-    ax.axis('equal')
-
-elif chart_type == 'box':
-    cols_to_plot = [ycol] if ycol else [c for c in df.columns if pd.to_numeric(df[c], errors='coerce').notna().sum() > 2]
-    data_box = [pd.to_numeric(df[c], errors='coerce').dropna() for c in cols_to_plot[:8]]
-    bp = ax.boxplot(data_box, labels=cols_to_plot[:8], patch_artist=True, zorder=3,
-                    medianprops=dict(color='#e8ff47', linewidth=2),
-                    whiskerprops=dict(color='#6a6a88'),
-                    capprops=dict(color='#6a6a88'),
-                    flierprops=dict(markerfacecolor='#ff4747', markersize=4, linestyle='none'))
-    for i, patch in enumerate(bp['boxes']):
-        patch.set_facecolor(cmap(i/max(len(bp['boxes'])-1,1)))
-        patch.set_alpha(0.75)
-    ax.grid(axis='y', zorder=1)
-
-ax.set_title(title)
-plt.tight_layout(pad=1.2)
-
-buf = io.BytesIO()
-plt.savefig(buf, format='png', dpi=150, bbox_inches='tight',
-            facecolor=fig.get_facecolor())
-plt.close()
-buf.seek(0)
-img_b64 = base64.b64encode(buf.read()).decode()
-'data:image/png;base64,' + img_b64
+sns.set_theme(style="whitegrid", palette="deep")
 `;
 
-    const result = await pyodide.runPythonAsync(pyCode);
-    chartDataUrl = result;
-    chartOutput.src = result;
-    outputSection.classList.add('visible');
-    setStatus('ready', 'Chart generated successfully');
+    let pyCode = '';
+    const fn = selectedFn;
 
-  } catch (err) {
-    errorBox.textContent = err.toString();
-    errorBox.classList.add('visible');
-    outputSection.classList.add('visible');
-    setStatus('error', 'Error generating chart');
+    if (fn === 'f1') {
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+plt.figure(figsize=(12,5))
+sns.lineplot(data=df, x="_tc", y="${dcol}", label="${dcol} [${dunit}]", color="#2471a3")
+plt.xlabel('Date'); plt.ylabel("${dcol} [${dunit}]")
+plt.title("${dcol} [${dunit}] Over Time [${tunit}]")
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f2') {
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df2 = df.set_index("_tc")
+df2 = df2.resample("ME").mean(numeric_only=True)
+plt.figure(figsize=(12,5))
+sns.lineplot(data=df2, x=df2.index, y="${dcol}", label="${dcol} [${dunit}]", color="#2471a3")
+plt.xlabel("Date"); plt.ylabel("${dcol} [${dunit}]")
+plt.title("Monthly Resampled — ${dcol} [${dunit}]")
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f3') {
+      const s = document.getElementById('f3start').value || '2000-01-01';
+      const e = document.getElementById('f3end').value || '2099-12-31';
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df_p = df.loc[(df["_tc"] >= "${s}") & (df["_tc"] <= "${e}")]
+plt.figure(figsize=(12,5))
+sns.lineplot(data=df_p, x="_tc", y="${dcol}", label="${dcol} [${dunit}]", color="#2471a3")
+plt.xlabel('Date'); plt.ylabel("${dcol} [${dunit}]")
+plt.title("${dcol} [${dunit}] — ${s} to ${e}")
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f4') {
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64, numpy as np
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df["_ord"] = df["_tc"].apply(pd.Timestamp.toordinal)
+df["${dcol}"] = pd.to_numeric(df["${dcol}"], errors='coerce')
+df = df.dropna(subset=["_ord","${dcol}"])
+fig, ax = plt.subplots(figsize=(12,5))
+sns.regplot(data=df, x="_ord", y="${dcol}", ci=95, scatter_kws={"s":30,"alpha":0.6}, ax=ax)
+x = df["_ord"].values; y = df["${dcol}"].values
+slope, intercept = np.polyfit(x, y, 1)
+y_pred = slope*x + intercept
+r2 = 1 - np.sum((y-y_pred)**2)/np.sum((y-np.mean(y))**2)
+eq = f"y = {slope:.6f}x + {intercept:.2f}\\n$R^2$ = {r2:.4f}"
+plt.text(0.05, 0.95, eq, transform=ax.transAxes, fontsize=10, va='top',
+  bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+plt.xlabel("Time [${tunit}]"); plt.ylabel("${dcol} [${dunit}]")
+plt.title("Regression — ${dcol} [${dunit}]"); plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f5') {
+      const model = document.getElementById('f5model').value;
+      const period = document.getElementById('f5period').value || '12';
+      const freq = document.getElementById('f5freq').value.trim();
+      const freqLine = freq ? `df = df.asfreq("${freq}")` : '';
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+from statsmodels.tsa.seasonal import seasonal_decompose
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df = df.sort_values("_tc").set_index("_tc")
+df["${dcol}"] = pd.to_numeric(df["${dcol}"], errors='coerce')
+df = df[["${dcol}"]].dropna()
+${freqLine}
+result = seasonal_decompose(df["${dcol}"], model="${model}", period=${period})
+comp = {"observed": result.observed, "trend": result.trend, "seasonal": result.seasonal, "residual": result.resid}
+import pandas as pd; cdf = pd.DataFrame(comp)
+fig, axes = plt.subplots(4, 1, figsize=(13, 10), sharex=True)
+for ax, col, title in zip(axes, ["observed","trend","seasonal","residual"], ["Observed","Trend","Seasonal","Residual"]):
+    sns.lineplot(data=cdf, x=cdf.index, y=col, ax=ax, color="#2471a3")
+    ax.set_title(title, fontsize=10, pad=6)
+plt.suptitle("Time Series Decomposition — ${model.toUpperCase()}", fontsize=12, y=1.01)
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f6') {
+      const lags = document.getElementById('f6lags').value || '40';
+      const freq = document.getElementById('f6freq').value.trim();
+      const freqLine = freq ? `series = series.asfreq("${freq}")` : '';
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+from statsmodels.graphics.tsaplots import plot_acf
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df = df.sort_values("_tc").set_index("_tc")
+series = pd.to_numeric(df["${dcol}"], errors='coerce').dropna()
+${freqLine}
+fig, ax = plt.subplots(figsize=(11,5))
+plot_acf(series, lags=${lags}, ax=ax)
+ax.set_title("Autocorrelation Function (ACF) — ${dcol}")
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f7') {
+      const lags = document.getElementById('f7lags').value || '40';
+      const freq = document.getElementById('f7freq').value.trim();
+      const method = document.getElementById('f7method').value || 'ywm';
+      const freqLine = freq ? `series = series.asfreq("${freq}")` : '';
+      pyCode = `
+${loadDf}
+${mplStyle}
+import io, base64
+from statsmodels.graphics.tsaplots import plot_pacf
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df = df.sort_values("_tc").set_index("_tc")
+series = pd.to_numeric(df["${dcol}"], errors='coerce').dropna()
+${freqLine}
+fig, ax = plt.subplots(figsize=(11,5))
+plot_pacf(series, lags=${lags}, method="${method}", ax=ax)
+ax.set_title("Partial Autocorrelation Function (PACF) — ${dcol}")
+plt.tight_layout()
+buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close()
+buf.seek(0); 'data:image/png;base64,' + base64.b64encode(buf.read()).decode()
+`;
+    } else if (fn === 'f8') {
+      const alpha = document.getElementById('f8alpha').value || '0.05';
+      pyCode = `
+${loadDf}
+import json
+from statsmodels.tsa.stattools import adfuller
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df = df.sort_values("_tc")
+series = pd.to_numeric(df["${dcol}"], errors='coerce').dropna()
+result = adfuller(series, autolag="AIC")
+adf_stat, p_value, used_lag, n_obs, crit = result[0], result[1], result[2], result[3], result[4]
+out = []
+out.append(f"ADF Statistic:        {adf_stat:.6f}")
+out.append(f"p-value:              {p_value:.6f}")
+out.append(f"Used Lag:             {used_lag}")
+out.append(f"Number of Obs:        {n_obs}")
+out.append("")
+out.append("Critical Values:")
+for k,v in crit.items(): out.append(f"   {k}: {v:.6f}")
+out.append("")
+verdict = "STATIONARY" if p_value < ${alpha} else "NON-STATIONARY"
+out.append(f"Result: Series is {verdict} (alpha={${alpha}})")
+json.dumps({"text": "\\n".join(out), "stationary": p_value < ${alpha}})
+`;
+    } else if (fn === 'f9') {
+      const reg = document.getElementById('f9reg').value;
+      const alpha = document.getElementById('f9alpha').value || '0.05';
+      pyCode = `
+${loadDf}
+import json
+from statsmodels.tsa.stattools import kpss
+df["_tc"] = pd.to_datetime(df["${tcol}"])
+df = df.sort_values("_tc")
+series = pd.to_numeric(df["${dcol}"], errors='coerce').dropna()
+import warnings; warnings.filterwarnings("ignore")
+stat, p_value, lags, crit = kpss(series, regression="${reg}", nlags="auto")
+out = []
+out.append(f"KPSS Statistic:       {stat:.6f}")
+out.append(f"p-value:              {p_value:.6f}")
+out.append(f"Used Lags:            {lags}")
+out.append("")
+out.append("Critical Values:")
+for k,v in crit.items(): out.append(f"   {k}: {v:.6f}")
+out.append("")
+verdict = "NON-STATIONARY" if p_value < ${alpha} else "STATIONARY"
+out.append(f"Result: Series is {verdict} (alpha={${alpha}})")
+json.dumps({"text": "\\n".join(out), "stationary": p_value >= ${alpha}})
+`;
+    }
+
+    const result = await pyodide.runPythonAsync(pyCode);
+
+    if (fn === 'f8' || fn === 'f9') {
+      const parsed = JSON.parse(result);
+      const text = parsed.text;
+      const stationary = parsed.stationary;
+      // Color the verdict line
+      const colored = text.replace(/(Result:.*)/, `<span class="${stationary ? 'stationary' : 'nonstationary'}">$1</span>`);
+      consoleOut.innerHTML = colored;
+      consoleOut.classList.add('visible');
+      outputWrap.classList.add('visible');
+      outputImg.style.display = 'none';
+      dlBtn.style.display = 'none';
+      outputLabel.textContent = fn.toUpperCase() + ' — STATIONARITY TEST RESULTS';
+    } else {
+      chartDataUrl = result;
+      outputImg.src = result;
+      outputImg.style.display = 'block';
+      dlBtn.style.display = 'block';
+      outputWrap.classList.add('visible');
+      outputLabel.textContent = fn.toUpperCase() + ' — OUTPUT';
+    }
+
+  } catch(e) {
+    errOut.textContent = e.toString();
+    errOut.classList.add('visible');
+    outputWrap.classList.add('visible');
   } finally {
     runBtn.classList.remove('loading');
     runBtn.disabled = false;
   }
 }
 
-// ─── Download ─────────────────────────────────────────────────────
-downloadBtn.addEventListener('click', () => {
+// ─── Download ─────────────────────────────────────────────
+dlBtn.addEventListener('click', () => {
   if (!chartDataUrl) return;
   const a = document.createElement('a');
   a.href = chartDataUrl;
-  a.download = (chartTitle.value || 'chart') + '.png';
+  a.download = (selectedFn || 'chart') + '_output.png';
   a.click();
 });
 
-runBtn.addEventListener('click', generateChart);
-
-// ─── Init ─────────────────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────
 initPyodide().then(() => {
-  if (fileData) { loadDataPreview(); runBtn.disabled = false; }
+  if (fileData) loadPreview();
 });
 </script>
 </body>
