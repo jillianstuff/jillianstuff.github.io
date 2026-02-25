@@ -983,7 +983,7 @@ for k,v in crit.items(): out.append(f"   {k}: {v:.6f}")
 out.append("")
 verdict = "STATIONARY" if p_value < ${alpha} else "NON-STATIONARY"
 out.append(f"Result: Series is {verdict} (alpha={${alpha}})")
-json.dumps({"text": "\\n".join(out), "stationary": p_value < ${alpha}})
+json.dumps({"text": "\\n".join(out), "stationary": bool(p_value < ${alpha})})
 `;
     } else if (fn === 'f9') {
       const reg = document.getElementById('f9reg').value;
@@ -1007,7 +1007,7 @@ for k,v in crit.items(): out.append(f"   {k}: {v:.6f}")
 out.append("")
 verdict = "NON-STATIONARY" if p_value < ${alpha} else "STATIONARY"
 out.append(f"Result: Series is {verdict} (alpha={${alpha}})")
-json.dumps({"text": "\\n".join(out), "stationary": p_value >= ${alpha}})
+json.dumps({"text": "\\n".join(out), "stationary": bool(p_value >= ${alpha})})
 `;
     }
 
