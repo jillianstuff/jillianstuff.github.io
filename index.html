@@ -521,7 +521,9 @@ async function initPyodide() {
   setStatus('loading', 'Loading Python runtime (first load ~5s)…');
   try {
     pyodide = await loadPyodide();
-    await pyodide.loadPackage(['micropip', 'numpy', 'pandas', 'matplotlib', 'openpyxl']);
+    await pyodide.loadPackage(['micropip', 'numpy', 'pandas', 'matplotlib']);
+    const micropip = pyodide.pyimport('micropip');
+    await micropip.install('openpyxl');
     setStatus('ready', 'Python ready — upload a file to begin');
     runBtn.disabled = !fileData;
   } catch (e) {
